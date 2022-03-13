@@ -1,7 +1,6 @@
 import java.util.Random;
 import java.util.Arrays;
 
-
 public class Main {
 	private static Random rand = new Random(); 
 	public static void main(String[] args) {

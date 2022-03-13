@@ -28,6 +28,7 @@ public final class MyParallelSort {
 		auxiliaryArray = new int [array.length];
 		conductSort();
 	}
+
 	
 	public static void sort(int[] array, int threadsToUse) {
 		if (threadsToUse <=0) throw new IllegalArgumentException();
@@ -81,51 +82,59 @@ public final class MyParallelSort {
 		return false;
 	}
 	
-	private static void tryMerging(ArrayList<ArrayWrapper> sortedBlocks) {
-		for(int j=0; j<sortedBlocks.size()- 1; ++j) {
-			for(int k = j+1; k < sortedBlocks.size(); ++k) {
-				ArrayWrapper leftSubArray, rightSubArray;
-				if (sortedBlocks.get(j).offset < sortedBlocks.get(k).offset) {
-					leftSubArray = sortedBlocks.get(j);
-					rightSubArray = sortedBlocks.get(k);
-				}
-				else {
-					leftSubArray = sortedBlocks.get(k);
-					rightSubArray = sortedBlocks.get(j);
-				}
-				
-				if (leftSubArray.offset  + leftSubArray.length == rightSubArray.offset ) {
-					
-					if (leftSubArray.isAuxiliary != rightSubArray.isAuxiliary) {
-						if (leftSubArray.length < rightSubArray.length) {
-							ArrayWrapper newSubArray = new ArrayWrapper(rightSubArray.isAuxiliary ? auxiliaryArray : mainArray, 
-									leftSubArray.offset, leftSubArray.length, rightSubArray.isAuxiliary);
-							newSubArray.copyFrom(leftSubArray);
-							leftSubArray = newSubArray;
-						}
-						else {
-							ArrayWrapper newSubArray = new ArrayWrapper(leftSubArray.isAuxiliary ? auxiliaryArray : mainArray, 
-									rightSubArray.offset, rightSubArray.length, leftSubArray.isAuxiliary);
-							newSubArray.copyFrom(rightSubArray);
-							rightSubArray = newSubArray;
-						}
-					}
-					
-					boolean shouldBeAuxiliary = !leftSubArray.isAuxiliary;
-					int offset= leftSubArray.offset;
-					int length = leftSubArray.length + rightSubArray.length;
-					ArrayWrapper resultArray = new ArrayWrapper(shouldBeAuxiliary ? auxiliaryArray : mainArray, offset, length, shouldBeAuxiliary);
-
-					Callable<ArrayWrapper> task = createMergingTask(resultArray, leftSubArray, rightSubArray);
-					
-					completionService.submit(task);
-					sortedBlocks.remove(k);
-					sortedBlocks.remove(j);
-					--j;
-					break;
-				}
+	private static ArrayWrapper moveBlock(ArrayWrapper subArray, boolean moveToAuxiliary) {
+		ArrayWrapper newSubArray = new ArrayWrapper(moveToAuxiliary? auxiliaryArray : mainArray, subArray.offset, subArray.length, moveToAuxiliary); 
+		newSubArray.copyFrom(subArray);
+		return newSubArray;
+	}
+	
+	private static void addSortedBlock(ArrayList<ArrayWrapper> sortedBlocks, ArrayWrapper block) {
+		for(int i= 0; i<sortedBlocks.size(); ++i) {
+			if (sortedBlocks.get(i).offset > block.offset) {
+				sortedBlocks.add(i, block);
+				return;
 			}
 		}
+		sortedBlocks.add(block);
+	}
+	
+	private static void tryMerging(ArrayList<ArrayWrapper> sortedBlocks) {
+		for(int i=0; i<sortedBlocks.size()- 1; ++i) {
+			ArrayWrapper leftSubArray, rightSubArray;
+			if (sortedBlocks.get(i).offset < sortedBlocks.get(i + 1).offset) {
+				leftSubArray = sortedBlocks.get(i);
+				rightSubArray = sortedBlocks.get(i + 1);
+			}
+			else {
+				leftSubArray = sortedBlocks.get(i + 1);
+				rightSubArray = sortedBlocks.get(i);
+			}
+			
+			if (leftSubArray.offset  + leftSubArray.length == rightSubArray.offset ) {
+				
+				if (leftSubArray.isAuxiliary != rightSubArray.isAuxiliary) {
+					if (leftSubArray.length < rightSubArray.length) {
+						leftSubArray = moveBlock(leftSubArray, !leftSubArray.isAuxiliary);
+					}
+					else {
+						rightSubArray = moveBlock(rightSubArray, !rightSubArray.isAuxiliary);
+					}
+				}
+				
+				boolean shouldBeAuxiliary = !leftSubArray.isAuxiliary;
+				int offset= leftSubArray.offset;
+				int length = leftSubArray.length + rightSubArray.length;
+				ArrayWrapper combinedArray = new ArrayWrapper(shouldBeAuxiliary ? auxiliaryArray : mainArray, offset, length, shouldBeAuxiliary);
+
+				Callable<ArrayWrapper> task = createMergingTask(combinedArray, leftSubArray, rightSubArray);
+				
+				completionService.submit(task);
+				sortedBlocks.remove(i + 1);
+				sortedBlocks.remove(i);
+				break;
+			}
+		}
+		
 	}
 	
 	private static void conductSort() {
@@ -141,7 +150,7 @@ public final class MyParallelSort {
 					break; 
 				}
 				
-				sortedBlocks.add(block);
+				addSortedBlock(sortedBlocks, block);
 				tryMerging(sortedBlocks);
 			}
 		
