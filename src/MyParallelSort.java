@@ -14,9 +14,10 @@ public final class MyParallelSort {
 	private static int elementsPerThread; 
 	private static int totalTaskCount;
 	private static int[] mainArray;
+	private static int[] auxiliaryArray;
 	private static boolean isSorting = false;
 	private static final ExecutorService executor = Executors.newFixedThreadPool(maxThreads); 
-	private static final CompletionService<Pair> completionService= new ExecutorCompletionService<Pair>(executor);
+	private static final CompletionService<ArrayWrapper> completionService= new ExecutorCompletionService<ArrayWrapper>(executor);
 	
 	public static void sort(int [] array) {
 		if (isSorting == true) {
@@ -24,6 +25,7 @@ public final class MyParallelSort {
 		}
 		isSorting = true;
 		mainArray = array;
+		auxiliaryArray = new int [array.length];
 		conductSort();
 	}
 	
@@ -43,68 +45,104 @@ public final class MyParallelSort {
 		for (int i=0; i<maxThreads; ++i) {
 			int from = i*elementsPerThread;
 			int to = i*elementsPerThread+elementsPerThread + ((i == maxThreads -1) ? remainder : 0);
-			int[] subArray = Arrays.copyOfRange(mainArray, from, to);
+			ArrayWrapper subArray = new ArrayWrapper(mainArray, from, to-from, false);
 			
-			completionService.submit(new Callable<Pair>(){
+			completionService.submit(new Callable<ArrayWrapper>(){
 				@Override
-				public Pair call(){
-					Arrays.sort(subArray);
-					return new Pair(from, subArray);
-				}
+				public ArrayWrapper call(){
+					Arrays.sort(subArray.originalArray, subArray.offset, subArray.offset+subArray.length);
+					return subArray;
+				} 
 			});	
+		}
+	}
+	
+	private static Callable<ArrayWrapper> createMergingTask(ArrayWrapper destinationArray, 
+			ArrayWrapper leftSubArry, ArrayWrapper rightSubAarray)
+	{
+		return new Callable<ArrayWrapper>() {
+			@Override 
+			public ArrayWrapper call(){
+				Merger.merge(destinationArray, leftSubArry, rightSubAarray);
+;				return destinationArray;
+			}
+		};
+	}
+	
+	private static boolean finalBlock(ArrayWrapper sortedBlock) {
+		if (sortedBlock.length == mainArray.length) {
+			if (sortedBlock.isAuxiliary) {
+				for (int j=0; j<mainArray.length; ++j) {
+					mainArray[j] = sortedBlock.get(j);
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+	
+	private static void tryMerging(ArrayList<ArrayWrapper> sortedBlocks) {
+		for(int j=0; j<sortedBlocks.size()- 1; ++j) {
+			for(int k = j+1; k < sortedBlocks.size(); ++k) {
+				ArrayWrapper leftSubArray, rightSubArray;
+				if (sortedBlocks.get(j).offset < sortedBlocks.get(k).offset) {
+					leftSubArray = sortedBlocks.get(j);
+					rightSubArray = sortedBlocks.get(k);
+				}
+				else {
+					leftSubArray = sortedBlocks.get(k);
+					rightSubArray = sortedBlocks.get(j);
+				}
+				
+				if (leftSubArray.offset  + leftSubArray.length == rightSubArray.offset ) {
+					
+					if (leftSubArray.isAuxiliary != rightSubArray.isAuxiliary) {
+						if (leftSubArray.length < rightSubArray.length) {
+							ArrayWrapper newSubArray = new ArrayWrapper(rightSubArray.isAuxiliary ? auxiliaryArray : mainArray, 
+									leftSubArray.offset, leftSubArray.length, rightSubArray.isAuxiliary);
+							newSubArray.copyFrom(leftSubArray);
+							leftSubArray = newSubArray;
+						}
+						else {
+							ArrayWrapper newSubArray = new ArrayWrapper(leftSubArray.isAuxiliary ? auxiliaryArray : mainArray, 
+									rightSubArray.offset, rightSubArray.length, leftSubArray.isAuxiliary);
+							newSubArray.copyFrom(rightSubArray);
+							rightSubArray = newSubArray;
+						}
+					}
+					
+					boolean shouldBeAuxiliary = !leftSubArray.isAuxiliary;
+					int offset= leftSubArray.offset;
+					int length = leftSubArray.length + rightSubArray.length;
+					ArrayWrapper resultArray = new ArrayWrapper(shouldBeAuxiliary ? auxiliaryArray : mainArray, offset, length, shouldBeAuxiliary);
+
+					Callable<ArrayWrapper> task = createMergingTask(resultArray, leftSubArray, rightSubArray);
+					
+					completionService.submit(task);
+					sortedBlocks.remove(k);
+					sortedBlocks.remove(j);
+					--j;
+					break;
+				}
+			}
 		}
 	}
 	
 	private static void conductSort() {
 		splitAndQueue();
 		
-		ArrayList<Pair> sortedBlocks = new ArrayList<Pair>(maxThreads);
+		ArrayList<ArrayWrapper> sortedBlocks = new ArrayList<ArrayWrapper>(maxThreads);
 		try {
 			
 			for(int i=0; i<totalTaskCount ; ++i) {
-				Future<Pair> futureResult = completionService.take();
-				Pair result = futureResult.get();
-				if (result.arr.length == mainArray.length) {
-					for (int j=0; j<mainArray.length; ++j) {
-						mainArray[j] = result.arr[j];
-					}
+				Future<ArrayWrapper> futureBlock = completionService.take();
+				ArrayWrapper block = futureBlock.get();
+				if (finalBlock(block)) {
 					break; 
 				}
-				sortedBlocks.add(result);
-				for(int j=0; j<sortedBlocks.size()- 1; ++j) {
-					for(int k = j+1; k < sortedBlocks.size(); ++k) {
-						
-						Pair leftSubArray, rightSubArray;
-						if (sortedBlocks.get(j).startPos < sortedBlocks.get(k).startPos) {
-							leftSubArray = sortedBlocks.get(j);
-							rightSubArray = sortedBlocks.get(k);
-						}
-						else {
-							leftSubArray = sortedBlocks.get(k);
-							rightSubArray = sortedBlocks.get(j);
-						}
-						
-						
-						if (leftSubArray.startPos + leftSubArray.arr.length == rightSubArray.startPos) {
-							int[] resultArray = new int[(rightSubArray.startPos + rightSubArray.arr.length) - leftSubArray.startPos];
-							
-							Callable<Pair> task = new Callable<Pair>() {
-								@Override 
-								public Pair call(){
-									merge(resultArray, leftSubArray.arr, rightSubArray.arr, leftSubArray.arr.length, rightSubArray.arr.length);
-									return new Pair(leftSubArray.startPos, resultArray);
-								}
-							};
-							
-							completionService.submit(task);
-							sortedBlocks.remove(k);
-							sortedBlocks.remove(j);
-							--i; 
-							break;
-						}
-					}
-				}
 				
+				sortedBlocks.add(block);
+				tryMerging(sortedBlocks);
 			}
 		
 		}
@@ -122,35 +160,4 @@ public final class MyParallelSort {
 		executor.shutdown();
 	}
 
-	
-	public static void merge(
-			  int[] a, int[] l, int[] r, int left, int right) {
-			 
-			    int i = 0, j = 0, k = 0;
-			    while (i < left && j < right) {
-			        if (l[i] <= r[j]) {
-			            a[k++] = l[i++];
-			        }
-			        else {
-			            a[k++] = r[j++];
-			        }
-			    }
-			    while (i < left) {
-			        a[k++] = l[i++];
-			    }
-			    while (j < right) {
-			        a[k++] = r[j++];
-			    }
-	}	
-}
-
-class Pair{
-	int startPos;
-	int[] arr;
-	
-	Pair(int x, int[] arr){
-		this.startPos = x; 
-		this.arr = arr;
-	}
-	
 }
