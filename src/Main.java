@@ -9,11 +9,11 @@ public class Main {
 		System.out.printf("\nMax number of threads == %d\n\n", availableThreads);
 	
 		int[] array;		
-		array = generateRandomArray(500536000);		
-		long startTime1 = System.currentTimeMillis();
-		MyParallelSort.sort(array);
-		long endTime1 = System.currentTimeMillis();
-		System.out.printf("%10d elements  =>  %6d ms \n", 65536000, endTime1 - startTime1);
+//		array = generateRandomArray(100536000);		
+//		long startTime1 = System.currentTimeMillis();
+//		MyParallelSort.sort(array);
+//		long endTime1 = System.currentTimeMillis();
+//		System.out.printf("%10d elements  =>  %6d ms \n", 65536000, endTime1 - startTime1);
 		int iterations = 16;
 		int totalIterations = 0;
 		long totalSeconds = 0;
