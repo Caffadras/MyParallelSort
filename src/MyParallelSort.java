@@ -10,6 +10,10 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.CountDownLatch;
 
+/**
+ * This class provided hybrid implementation of parallel sort. 
+ * @author Caffadras
+ */
 public final class MyParallelSort {
 	private static int maxThreads = Runtime.getRuntime().availableProcessors();
 	private static int elementsPerThread; 
@@ -63,8 +67,8 @@ public final class MyParallelSort {
 		 * x-----------------------------------x
 		 * |          Original Array           |
 		 * x-----------------------------------x
-		 *					|
-		 * 2.				|					
+		 *                  |
+		 * 2.               |					
 		 * x-----x-----x-----x-----x-----x-----x
 		 * |     |     |     |     |     |     |
 		 * x-----x-----x-----x-----x-----x-----x
@@ -276,18 +280,18 @@ public final class MyParallelSort {
 		 * x-----------------------------------x
 		 * |         Final Sorted Array        |
 		 * x-----------------------------------x
-		 * 					^
-		 * 3.				|
+		 *                  ^
+		 * 3.               |
 		 * x-----------------------x-----------x
 		 * |                       |           |
 		 * x-----------------------x-----------x
-		 * 					^
-		 * 2.				|
+		 *                  ^
+		 * 2.               |
 		 * x-----------x-----------x-----------x
 		 * |           |           |           |
 		 * x-----------x-----------x-----------x
-		 * 					^
-		 * 1.				|
+		 *                  ^
+		 * 1.               |
 		 * x-----x-----x-----x-----x-----x-----x
 		 * |     |     |     |     |     |     |
 		 * x-----x-----x-----x-----x-----x-----x
@@ -393,3 +397,239 @@ public final class MyParallelSort {
 	}
 
 }
+
+
+
+
+
+
+/**
+ * Provides an array wrapper for convenience and better memory usage. 
+ * A part of the original array can be used as an independent array.
+ * Should be used only in MyParallelSort class.
+ */
+class ArrayWrapper {
+	//Array to wrap
+	final int[] originalArray; 
+	
+	//starting offset
+	final int offset;
+	
+	//the length if the array wrapper
+	final int length; 
+	
+	//indicates if this array wrapper is used on an auxiliary array
+	final boolean isAuxiliary;
+
+	
+	/**
+     * Constructs an array wrapper containing the elements of the specified
+     * array in the specified range.
+	 * @param array the original array to wrap
+	 * @param offset the starting offset 
+	 * @param length the length of the array wrapper
+	 * @param isAuxiliary indicates if this array wrapper is used on an auxiliary array
+	 * @throws ArrayIndexOutOfBoundsException
+	 */
+	public ArrayWrapper(int[] array, int offset, int length, boolean isAuxiliary) {
+		/*
+		 * |            Original Array              |
+		 * x------------------x---------------x-----x
+		 * |      Offset      | Array Wrapper |     |
+		 * x------------------x---------------x-----x
+		 *                    |     Length    |
+		 */
+		
+		if (offset < 0 || offset + length > array.length) {
+			throw new ArrayIndexOutOfBoundsException();
+		}
+		originalArray = array; 
+		this.offset = offset; 
+		this.length = length; 
+		this.isAuxiliary = isAuxiliary;
+	}
+	
+	
+    /**
+     * Returns the element at the specified position in this array.
+     * @param  index index of the element to return
+     * @return the element at the specified position in this array
+     * @throws ArrayIndexOutOfBoundsException 
+     */
+	public int get (int index) {
+		if (index < 0 || index >= length) {
+			throw new ArrayIndexOutOfBoundsException();
+		}
+		return originalArray[offset + index];
+	}
+	
+	
+	/**
+	 * Replaces the element at the specified position in this array with
+     * the specified element.
+     * @param index index of the element to replace
+     * @param newValue value to be stored at the specified position
+     * @throws ArrayIndexOutOfBoundsException 
+	 */
+	public void set(int index, int newValue) {
+		if (index < 0 || index >= length) {
+			throw new ArrayIndexOutOfBoundsException();
+		}
+		originalArray[offset + index] = newValue;
+	}
+	
+	
+	/**
+	 * Copies the contents of the specified array. 
+	 * Specified array can be both shorter and longer than this array. 
+	 * In that case, extra elements are ignored or left untouched. 
+	 * @param from an array to copy the contents from.
+	 */
+	public void copyFrom(ArrayWrapper from) {
+		for(int i=0; i<from.length && i < this.length; ++i) {
+			this.set(i, from.get(i));
+			//Arrays.toString(originalArray);
+		}
+	}
+	
+
+	/**
+	 * Returns a string representation of the contents of the specified array,
+     * enclosed in square brackets.
+	 * Mostly used for the debug purposes.
+	 */
+	public String toString() {
+		String result = "["; 
+		for(int i =0; i<length; ++i) {
+			result = result + get(i) + (i == length -1 ? "" : ", ");
+		}
+		result = result + "]";
+		return result;
+	}
+}
+
+
+/**
+ * Provides merge methods to use in parallel. 
+ * Should be used only in MyParallelSort class.
+ */
+class Merger {
+	
+	/**
+	 * Merge version which merges two arrays using same algorithm as partialMerge method uses, however, cannot be used in parallel in this implementation.
+	 * @param destinationArray array to place merged elements
+	 * @param leftArray first array to merge
+	 * @param rightArray second array to merge
+	 */
+	public static void merge(ArrayWrapper destinationArray, ArrayWrapper leftArray, ArrayWrapper rightArray) {
+		int smallerElements = 0;
+		for(int i =0; i<leftArray.length; ++i) {
+			smallerElements = countSmallerElements(rightArray, leftArray.get(i), smallerElements == 0? smallerElements : smallerElements -1 );
+			destinationArray.set(i + smallerElements, leftArray.get(i));
+		}
+		smallerElements = 0; 
+		for(int i =0; i<rightArray.length; ++i) {
+			smallerElements = countSmallerEqualElements(leftArray, rightArray.get(i), smallerElements == 0? smallerElements : smallerElements -1);
+			destinationArray.set(i + smallerElements, rightArray.get(i));
+		}
+	} 
+	
+	/**
+	 * Merges only a specified range of elements from one array. 
+	 * This method is used in parallel. 
+	 * @param destinationArray array to place merged elements
+	 * @param arrayToMerge elements from this array are merged 
+	 * @param from start index
+	 * @param to end index
+	 * @param secondArray to calculate position of an element form the arrayToMerge, we need to reference the second array, the array that we are merging with
+	 * @param countEqual if we should count equal elements as smaller elements
+	 * @throws IllegalArgumentException is the specified range is illegal (from < 0 || from > to || to > arrayToMerge.length )
+	 */
+	public static void partialMerge(ArrayWrapper destinationArray, ArrayWrapper arrayToMerge, int from, int to, ArrayWrapper secondArray, boolean countEqual) {
+		if (from < 0 || from > to || to > arrayToMerge.length )
+			throw new IllegalArgumentException();
+		int smallerElements = 0; 
+		for(int i=from; i<to; ++i) {
+			
+			if (countEqual) {
+				smallerElements = countSmallerEqualElements(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1);
+			}
+			else {
+				smallerElements = countSmallerElements(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1 );
+			}
+			destinationArray.set( i + smallerElements, arrayToMerge.get(i));
+		}
+	}
+	
+	/**
+	 * Count how many elements are smaller in the array than a specified element.
+	 * @param array array to count elements 
+	 * @param target the element to compare with
+	 * @param minIdx the starting position to look for
+	 * @return the amount of elements that are smaller then a target
+	 */
+	private static int countSmallerElements(ArrayWrapper array, int target, int minIdx) {
+		for(int i = minIdx; i<array.length; ++i ) {
+			if (array.get(i) >= target ) {
+				return i;
+			}
+		}
+		return array.length;
+	}
+	
+	/**
+	 * Count how many elements are smaller or equal in the array than a specified element.
+	 * @param array array to count elements 
+	 * @param target the element to compare with
+	 * @param minIdx the starting position to look for
+	 * @return the amount of elements that are smaller or equal then a target
+	 */
+	private static int countSmallerEqualElements(ArrayWrapper array, int target, int minIdx) {
+		for(int i = minIdx; i<array.length; ++i ) {
+			if (array.get(i) > target ) {
+				return i;
+			}
+		}
+		return array.length;
+	}
+	
+	/**
+	 * Count how many elements are smaller or equal in the array than a specified element with binary search.
+	 * Binary search in this implementation ends up being redundant.  
+	 * @param array array to count elements 
+	 * @param target the element to compare with
+	 * @param minIdx the starting position to look for
+	 * @param countEqual if we should also count equal elements
+	 * @return the amount of elements that are smaller (or equal) then a target
+	 * @throws IllegalArgumentException if the minIdx > array.lenth
+	 */
+	@Deprecated
+	private static int binaryCountSmallerElements(ArrayWrapper array, int target, int minIdx, boolean countEqual) {
+		int maxIdx = array.length-1; 
+		int currentIdx = minIdx + (maxIdx-minIdx)/2;
+		if (minIdx > maxIdx) {
+			throw new IllegalArgumentException();
+		}
+		while (minIdx < maxIdx ) {
+			if (array.get(currentIdx) <target || (countEqual && array.get(currentIdx) == target)) {
+				if(array.get(currentIdx + 1) > target) {
+					return currentIdx+1;
+				}
+				else {
+					if (maxIdx-minIdx == 1) {
+						return currentIdx + 1 + ((array.get(currentIdx + 1) < target 
+								|| (countEqual && array.get(currentIdx + 1) == target)) ? 1 :0);
+					}
+					minIdx = currentIdx;
+					currentIdx = minIdx + (maxIdx-minIdx)/2;
+				}
+			}
+			else {
+				maxIdx = currentIdx;
+				currentIdx = minIdx + (maxIdx-minIdx)/2 ;
+			}	
+		}
+		return currentIdx + ((array.get(maxIdx) < target || (countEqual && array.get(currentIdx) == target))? 1 :0);
+	}
+}
+

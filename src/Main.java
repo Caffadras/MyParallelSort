@@ -4,19 +4,13 @@ import java.util.Arrays;
 public class Main {
 	private static Random rand = new Random(); 
 	public static void main(String[] args) {
+		System.out.println("Running 2 tests.");
+		
 		int availableThreads = Runtime.getRuntime().availableProcessors();
 		System.out.printf("\nMax number of threads == %d\n\n", availableThreads);
-	
+		System.out.println("Test (1 of 2)");
 		int[] array;		
-//		int size1 = 200536000;
-//		while (true) {
-//			array = generateRandomArray(size1);		
-//			long startTime1 = System.currentTimeMillis();
-//			MyParallelSort.sort(array);
-//			long endTime1 = System.currentTimeMillis();
-//			System.out.printf("%10d elements  =>  %6d ms \n", size1, endTime1 - startTime1);
-//			if (size1 / 3 == 4) break;
-//		}
+
 		int iterations = 17;
 		int totalIterations = 0;
 		long totalSeconds = 0;
@@ -27,24 +21,41 @@ public class Main {
 				array = generateRandomArray(size);	
 				int[] testArray = Arrays.copyOf(array, array.length);
 				Arrays.sort(testArray);
-				
-				//System.out.println("Array: " + Arrays.toString(array));
 				long startTime = System.currentTimeMillis();
 				MyParallelSort.sort(array, i);
 				long endTime = System.currentTimeMillis();
-				//System.out.println("Array: " + Arrays.toString(array));
 				System.out.printf("%10d elements  =>  %6d ms \n", size, endTime - startTime);
 				totalSeconds += endTime - startTime;
 				++totalIterations;
 				loggingIsSorted(array);
-			//System.out.println(Arrays.equals(array, testArray));
 				size *= 2;
 			}
 			
 		}
-		
-		MyParallelSort.shutdown();
 		System.out.println("Absolute average time: " + ((double)totalSeconds) / totalIterations + " ms");
+		
+		totalSeconds = 0; 
+		System.out.println("Test (2 of 2)");
+		System.out.println("Running 5 sorts of an array with 200 millions elements.");
+		int size = 200536000;
+		iterations = 5;
+		for(int i=0; i<iterations; ++i) {
+			try {
+				array = generateRandomArray(size);		
+				long startTime = System.currentTimeMillis();
+				MyParallelSort.sort(array);
+				long endTime = System.currentTimeMillis();
+				System.out.printf("%10d elements  =>  %6d ms \n", size, endTime - startTime);
+				totalSeconds += endTime - startTime;
+				loggingIsSorted(array);				
+			}
+			catch (OutOfMemoryError  er) {
+				System.out.println("Not enough memory to run test 2.");
+				break;
+			}
+		}
+		System.out.println("Absolute average time: " + ((double)totalSeconds) / iterations + " ms");
+		MyParallelSort.shutdown();
 		System.out.println("Terminated.");
 	}
 	
