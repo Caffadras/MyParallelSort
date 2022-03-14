@@ -37,7 +37,7 @@ public class Main {
 				totalSeconds += endTime - startTime;
 				++totalIterations;
 				loggingIsSorted(array);
-				//System.out.println(Arrays.equals(array, testArray));
+			//System.out.println(Arrays.equals(array, testArray));
 				size *= 2;
 			}
 			

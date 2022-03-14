@@ -1,108 +1,64 @@
-import java.util.Arrays;
-import java.util.Random;
 
+/**
+ * Provides merge methods to use in parallel. 
+ * Should be used only in MyParallelSort class.
+ */
 public class Merger {
 	
-	public static void main(String [] agrs) {
-		int[] testArray = new int[] {3, 3, 4};
-		ArrayWrapper testWrapper = new ArrayWrapper(testArray, 0, 3, false);
-		System.out.println(countSmallerElements(testWrapper, 4, 0, false));
-		System.out.println(countSmallerElements(testWrapper, 4, 0, true));
-		final int SIZE = 1120;
-		Random rand = new Random();
-		int[] array = new int[SIZE];
-		for(int i =0; i<array.length; ++i) {
-			array[i] = rand.nextInt(1000) +1;
-		}
-		int[] array2 = array.clone();
-		int[] array3 = array.clone();
-
-		System.out.println("Array1: " + Arrays.toString(array));
-		System.out.println("Array2: " + Arrays.toString(array2));
-		Arrays.sort(array);
-		
-		ArrayWrapper array2Wrapper = new ArrayWrapper(array2, 0, array2.length, false);
-		ArrayWrapper part1 = new ArrayWrapper(array3, 0, SIZE/2, false);
-		ArrayWrapper part2 = new ArrayWrapper(array3, SIZE/2, SIZE-(SIZE/2), false);
-
-		
-		Arrays.sort(array3, 0, SIZE/2);
-		Arrays.sort(array3, SIZE/2, SIZE);
-
-		//Arrays.fill(array2,0);
-		System.out.println("Sorted Array2: " + Arrays.toString(array2));
-		System.out.println("Sorted Array3: " + Arrays.toString(array3));
-		
-		
-		partialMerge(array2Wrapper, part1, 0, (SIZE/2)/2, part2, false);
-		partialMerge(array2Wrapper, part1, (SIZE/2)/2, SIZE/2, part2, false);
-		partialMerge(array2Wrapper, part2, 0, (SIZE/2)/2, part1, true);
-		partialMerge(array2Wrapper, part2, (SIZE/2)/2, SIZE/2, part1, true);
-		//merge(array2Wrapper, part1, part2);
-		
-		System.out.println("Sorted Array1: " + Arrays.toString(array));
-		System.out.println("Sorted Array3: " + Arrays.toString(array2));
-		System.out.println(Arrays.equals(array, array2));
-		
-		
-	}
-	
-	public static int[] checkSorting(ArrayWrapper leftArray, ArrayWrapper rightArray) {
-		int[] resultArray = new int[leftArray.length + rightArray.length];
-		for(int i=0; i< leftArray.length; ++i) {
-			resultArray[i] = leftArray.get(i);
-		}
-		for(int i =0; i<rightArray.length; ++i) {
-			resultArray[leftArray.length + i] = rightArray.get(i);
-		}
-		
-		Arrays.sort(resultArray);
-		return resultArray;
-	}
-	
+	/**
+	 * Merge version which merges two arrays using same algorithm as partialMerge method uses, however, cannot be used in parallel in this implementation.
+	 * @param destinationArray array to place merged elements
+	 * @param leftArray first array to merge
+	 * @param rightArray second array to merge
+	 */
 	public static void merge(ArrayWrapper destinationArray, ArrayWrapper leftArray, ArrayWrapper rightArray) {
-		if (isSorted(leftArray) == false) {
-			System.out.println("###Left input array was not sorted! " + leftArray.toString());
-
-		}
-		if (isSorted(rightArray) == false) {
-			System.out.println("###Right input array was not sorted! " + rightArray.toString());
-		}
-
 		int smallerElements = 0;
 		for(int i =0; i<leftArray.length; ++i) {
-			smallerElements = countSmallerElementsSimple(rightArray, leftArray.get(i), smallerElements == 0? smallerElements : smallerElements -1 );
+			smallerElements = countSmallerElements(rightArray, leftArray.get(i), smallerElements == 0? smallerElements : smallerElements -1 );
 			destinationArray.set(i + smallerElements, leftArray.get(i));
 		}
 		smallerElements = 0; 
 		for(int i =0; i<rightArray.length; ++i) {
-			smallerElements = countSmallerEqualElementsSimple(leftArray, rightArray.get(i), smallerElements == 0? smallerElements : smallerElements -1);
+			smallerElements = countSmallerEqualElements(leftArray, rightArray.get(i), smallerElements == 0? smallerElements : smallerElements -1);
 			destinationArray.set(i + smallerElements, rightArray.get(i));
 		}
 	} 
 	
-	public static boolean isSorted(ArrayWrapper array) {
-		for(int i =0; i<array.length-1; ++i) {
-			if (array.get(i) > array.get(i+1)) return false;
-		}
-		return true;
-	}
-	
+	/**
+	 * Merges only a specified range of elements from one array. 
+	 * This method is used in parallel. 
+	 * @param destinationArray array to place merged elements
+	 * @param arrayToMerge elements from this array are merged 
+	 * @param from start index
+	 * @param to end index
+	 * @param secondArray to calculate position of an element form the arrayToMerge, we need to reference the second array, the array that we are merging with
+	 * @param countEqual if we should count equal elements as smaller elements
+	 * @throws IllegalArgumentException is the specified range is illegal (from < 0 || from > to || to > arrayToMerge.length )
+	 */
 	public static void partialMerge(ArrayWrapper destinationArray, ArrayWrapper arrayToMerge, int from, int to, ArrayWrapper secondArray, boolean countEqual) {
+		if (from < 0 || from > to || to > arrayToMerge.length )
+			throw new IllegalArgumentException();
 		int smallerElements = 0; 
 		for(int i=from; i<to; ++i) {
 			
 			if (countEqual) {
-				smallerElements = countSmallerEqualElementsSimple(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1);
+				smallerElements = countSmallerEqualElements(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1);
 			}
 			else {
-				smallerElements = countSmallerElementsSimple(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1 );
+				smallerElements = countSmallerElements(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1 );
 			}
 			destinationArray.set( i + smallerElements, arrayToMerge.get(i));
 		}
 	}
-	 
-	public static int countSmallerElementsSimple(ArrayWrapper array, int target, int minIdx) {
+	
+	/**
+	 * Count how many elements are smaller in the array than a specified element.
+	 * @param array array to count elements 
+	 * @param target the element to compare with
+	 * @param minIdx the starting position to look for
+	 * @return the amount of elements that are smaller then a target
+	 */
+	private static int countSmallerElements(ArrayWrapper array, int target, int minIdx) {
 		for(int i = minIdx; i<array.length; ++i ) {
 			if (array.get(i) >= target ) {
 				return i;
@@ -111,7 +67,14 @@ public class Merger {
 		return array.length;
 	}
 	
-	public static int countSmallerEqualElementsSimple(ArrayWrapper array, int target, int minIdx) {
+	/**
+	 * Count how many elements are smaller or equal in the array than a specified element.
+	 * @param array array to count elements 
+	 * @param target the element to compare with
+	 * @param minIdx the starting position to look for
+	 * @return the amount of elements that are smaller or equal then a target
+	 */
+	private static int countSmallerEqualElements(ArrayWrapper array, int target, int minIdx) {
 		for(int i = minIdx; i<array.length; ++i ) {
 			if (array.get(i) > target ) {
 				return i;
@@ -119,7 +82,19 @@ public class Merger {
 		}
 		return array.length;
 	}
-	public static int countSmallerElements(ArrayWrapper array, int target, int minIdx, boolean countEqual) {
+	
+	/**
+	 * Count how many elements are smaller or equal in the array than a specified element with binary search.
+	 * Binary search in this implementation ends up being redundant.  
+	 * @param array array to count elements 
+	 * @param target the element to compare with
+	 * @param minIdx the starting position to look for
+	 * @param countEqual if we should also count equal elements
+	 * @return the amount of elements that are smaller (or equal) then a target
+	 * @throws IllegalArgumentException if the minIdx > array.lenth
+	 */
+	@Deprecated
+	private static int binaryCountSmallerElements(ArrayWrapper array, int target, int minIdx, boolean countEqual) {
 		int maxIdx = array.length-1; 
 		int currentIdx = minIdx + (maxIdx-minIdx)/2;
 		if (minIdx > maxIdx) {
