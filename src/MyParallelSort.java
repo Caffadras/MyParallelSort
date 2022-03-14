@@ -8,11 +8,11 @@ import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CountDownLatch;
 
 public final class MyParallelSort {
 	private static int maxThreads = Runtime.getRuntime().availableProcessors();
 	private static int elementsPerThread; 
-	private static int totalTaskCount;
 	private static int[] mainArray;
 	private static int[] auxiliaryArray;
 	private static boolean isSorting = false;
@@ -38,14 +38,13 @@ public final class MyParallelSort {
 	
 	private static void splitAndQueue() {
 		elementsPerThread = mainArray.length / maxThreads;
-		totalTaskCount = maxThreads*2 -1;
-		int remainder = mainArray.length - (mainArray.length / maxThreads * maxThreads) ;
+		int remainder = mainArray.length - (elementsPerThread * maxThreads) ;
 		if (mainArray.length < maxThreads) maxThreads = mainArray.length;
 		
 		
 		for (int i=0; i<maxThreads; ++i) {
 			int from = i*elementsPerThread;
-			int to = i*elementsPerThread+elementsPerThread + ((i == maxThreads -1) ? remainder : 0);
+			int to = from + elementsPerThread + ((i == maxThreads -1) ? remainder : 0);
 			ArrayWrapper subArray = new ArrayWrapper(mainArray, from, to-from, false);
 			
 			completionService.submit(new Callable<ArrayWrapper>(){
@@ -57,17 +56,74 @@ public final class MyParallelSort {
 			});	
 		}
 	}
-	
-	private static Callable<ArrayWrapper> createMergingTask(ArrayWrapper destinationArray, 
-			ArrayWrapper leftSubArry, ArrayWrapper rightSubAarray)
+	 
+	private static ArrayList<Callable<ArrayWrapper>> splitIntoTasks(ArrayWrapper destinationArray, ArrayWrapper arrayToSplit, 
+			int numberOfTasks, ArrayWrapper secondArray, boolean countEqual, CountDownLatch endGate, boolean lastSort)
 	{
-		return new Callable<ArrayWrapper>() {
+		int splitBlockSize = arrayToSplit.length / numberOfTasks;
+		ArrayList<Callable<ArrayWrapper>> tasks = new ArrayList<>(numberOfTasks);
+		for(int i=0; i<numberOfTasks - 1; ++i) {
+			int from = splitBlockSize * i; 
+			int to = from + splitBlockSize ;
+			
+			tasks.add(new Callable<ArrayWrapper>() {
+				@Override
+				public ArrayWrapper call() {
+					Merger.partialMerge(destinationArray, arrayToSplit, from, to, secondArray, countEqual);
+					endGate.countDown();
+					return null;
+				}
+			});
+		}
+		int from = splitBlockSize * (numberOfTasks-1);
+		int to = arrayToSplit.length;// - 1; 
+		
+		tasks.add(new Callable<ArrayWrapper>() {
 			@Override 
-			public ArrayWrapper call(){
-				Merger.merge(destinationArray, leftSubArry, rightSubAarray);
-;				return destinationArray;
+			public ArrayWrapper call() {
+				Merger.partialMerge(destinationArray, arrayToSplit, from, to, secondArray, countEqual);
+				endGate.countDown();
+				if (lastSort) {
+					try {
+						endGate.await();
+						return destinationArray;
+					} catch(InterruptedException e) {
+						e.printStackTrace();
+						return null;
+					}
+				}
+				else {	
+					return null;
+				}
 			}
-		};
+		});
+		
+		return tasks;
+	}
+	
+	private static void addToCompletionService(CompletionService<ArrayWrapper> service, ArrayList<Callable<ArrayWrapper>> taskList) {
+		for(int i=0; i<taskList.size(); ++i) {
+			service.submit(taskList.get(i));
+		}
+	}
+	
+	private static void createMergingTask(ArrayWrapper destinationArray, 
+			ArrayWrapper leftSubArray, ArrayWrapper rightSubArray, CompletionService<ArrayWrapper> service)
+	{
+		int threadsToUse = (int) Math.round(((double)destinationArray.length) /elementsPerThread);
+		CountDownLatch endGate = new CountDownLatch(threadsToUse);
+		if (leftSubArray.length < rightSubArray.length) {
+			addToCompletionService(service, 
+				splitIntoTasks(destinationArray, leftSubArray, threadsToUse/2, rightSubArray, false, endGate, false));
+			addToCompletionService(service, 
+				splitIntoTasks(destinationArray, rightSubArray, threadsToUse-(threadsToUse/2), leftSubArray, true, endGate, true));
+		}
+		else {
+			addToCompletionService(service, 
+				splitIntoTasks(destinationArray, leftSubArray, threadsToUse-(threadsToUse/2), rightSubArray, false, endGate, false));
+			addToCompletionService(service, 
+				splitIntoTasks(destinationArray, rightSubArray,threadsToUse/2, leftSubArray, true, endGate, true));
+		}
 	}
 	
 	private static boolean finalBlock(ArrayWrapper sortedBlock) {
@@ -126,9 +182,8 @@ public final class MyParallelSort {
 				int length = leftSubArray.length + rightSubArray.length;
 				ArrayWrapper combinedArray = new ArrayWrapper(shouldBeAuxiliary ? auxiliaryArray : mainArray, offset, length, shouldBeAuxiliary);
 
-				Callable<ArrayWrapper> task = createMergingTask(combinedArray, leftSubArray, rightSubArray);
+				createMergingTask(combinedArray, leftSubArray, rightSubArray, completionService);
 				
-				completionService.submit(task);
 				sortedBlocks.remove(i + 1);
 				sortedBlocks.remove(i);
 				break;
@@ -143,9 +198,11 @@ public final class MyParallelSort {
 		ArrayList<ArrayWrapper> sortedBlocks = new ArrayList<ArrayWrapper>(maxThreads);
 		try {
 			
-			for(int i=0; i<totalTaskCount ; ++i) {
+			while (true) {
 				Future<ArrayWrapper> futureBlock = completionService.take();
 				ArrayWrapper block = futureBlock.get();
+				if (block == null) continue;
+				
 				if (finalBlock(block)) {
 					break; 
 				}

@@ -8,12 +8,16 @@ public class Main {
 		System.out.printf("\nMax number of threads == %d\n\n", availableThreads);
 	
 		int[] array;		
-//		array = generateRandomArray(100536000);		
-//		long startTime1 = System.currentTimeMillis();
-//		MyParallelSort.sort(array);
-//		long endTime1 = System.currentTimeMillis();
-//		System.out.printf("%10d elements  =>  %6d ms \n", 65536000, endTime1 - startTime1);
-		int iterations = 16;
+//		int size1 = 200536000;
+//		while (true) {
+//			array = generateRandomArray(size1);		
+//			long startTime1 = System.currentTimeMillis();
+//			MyParallelSort.sort(array);
+//			long endTime1 = System.currentTimeMillis();
+//			System.out.printf("%10d elements  =>  %6d ms \n", size1, endTime1 - startTime1);
+//			if (size1 / 3 == 4) break;
+//		}
+		int iterations = 17;
 		int totalIterations = 0;
 		long totalSeconds = 0;
 		for (int i = 1; i<=availableThreads; i*=2) {
@@ -28,11 +32,12 @@ public class Main {
 				long startTime = System.currentTimeMillis();
 				MyParallelSort.sort(array, i);
 				long endTime = System.currentTimeMillis();
+				//System.out.println("Array: " + Arrays.toString(array));
 				System.out.printf("%10d elements  =>  %6d ms \n", size, endTime - startTime);
 				totalSeconds += endTime - startTime;
 				++totalIterations;
 				loggingIsSorted(array);
-				System.out.println(Arrays.equals(array, testArray));
+				//System.out.println(Arrays.equals(array, testArray));
 				size *= 2;
 			}
 			

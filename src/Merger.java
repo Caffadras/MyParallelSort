@@ -8,7 +8,7 @@ public class Merger {
 		ArrayWrapper testWrapper = new ArrayWrapper(testArray, 0, 3, false);
 		System.out.println(countSmallerElements(testWrapper, 4, 0, false));
 		System.out.println(countSmallerElements(testWrapper, 4, 0, true));
-		final int SIZE = 1111;
+		final int SIZE = 1120;
 		Random rand = new Random();
 		int[] array = new int[SIZE];
 		for(int i =0; i<array.length; ++i) {
@@ -24,18 +24,27 @@ public class Merger {
 		ArrayWrapper array2Wrapper = new ArrayWrapper(array2, 0, array2.length, false);
 		ArrayWrapper part1 = new ArrayWrapper(array3, 0, SIZE/2, false);
 		ArrayWrapper part2 = new ArrayWrapper(array3, SIZE/2, SIZE-(SIZE/2), false);
+
+		
 		Arrays.sort(array3, 0, SIZE/2);
 		Arrays.sort(array3, SIZE/2, SIZE);
 
-		
+		//Arrays.fill(array2,0);
 		System.out.println("Sorted Array2: " + Arrays.toString(array2));
 		System.out.println("Sorted Array3: " + Arrays.toString(array3));
 		
-		merge(array2Wrapper, part1, part2);
+		
+		partialMerge(array2Wrapper, part1, 0, (SIZE/2)/2, part2, false);
+		partialMerge(array2Wrapper, part1, (SIZE/2)/2, SIZE/2, part2, false);
+		partialMerge(array2Wrapper, part2, 0, (SIZE/2)/2, part1, true);
+		partialMerge(array2Wrapper, part2, (SIZE/2)/2, SIZE/2, part1, true);
+		//merge(array2Wrapper, part1, part2);
 		
 		System.out.println("Sorted Array1: " + Arrays.toString(array));
 		System.out.println("Sorted Array3: " + Arrays.toString(array2));
 		System.out.println(Arrays.equals(array, array2));
+		
+		
 	}
 	
 	public static int[] checkSorting(ArrayWrapper leftArray, ArrayWrapper rightArray) {
@@ -77,6 +86,20 @@ public class Merger {
 			if (array.get(i) > array.get(i+1)) return false;
 		}
 		return true;
+	}
+	
+	public static void partialMerge(ArrayWrapper destinationArray, ArrayWrapper arrayToMerge, int from, int to, ArrayWrapper secondArray, boolean countEqual) {
+		int smallerElements = 0; 
+		for(int i=from; i<to; ++i) {
+			
+			if (countEqual) {
+				smallerElements = countSmallerEqualElementsSimple(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1);
+			}
+			else {
+				smallerElements = countSmallerElementsSimple(secondArray, arrayToMerge.get(i), smallerElements == 0? smallerElements : smallerElements -1 );
+			}
+			destinationArray.set( i + smallerElements, arrayToMerge.get(i));
+		}
 	}
 	 
 	public static int countSmallerElementsSimple(ArrayWrapper array, int target, int minIdx) {
