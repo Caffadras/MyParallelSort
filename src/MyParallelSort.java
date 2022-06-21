@@ -12,7 +12,7 @@ import java.util.concurrent.CountDownLatch;
 
 /**
  * This class provided hybrid implementation of parallel sort. 
- * @author Caffadras
+ * @author Dubrovschii Semion
  */
 public final class MyParallelSort {
 	private static int maxThreads = Runtime.getRuntime().availableProcessors();
